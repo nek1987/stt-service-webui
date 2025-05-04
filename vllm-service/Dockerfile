@@ -7,7 +7,10 @@ FROM vllm/vllm-openai:latest
 RUN pip install --no-cache-dir --upgrade "vllm[audio]"
 
 # Устанавливаем ffmpeg и libsndfile1 для обработки аудио
-RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -o Acquire::ForceIPv4=true && \
+    apt-get install -y -o Acquire::ForceIPv4=true ffmpeg libsndfile1 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Нет необходимости в CMD или ENTRYPOINT, так как они уже определены в базовом образе
 # и команда передается через docker-compose.yml
