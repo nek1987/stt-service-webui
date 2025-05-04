@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  stt-service:
+    # Указываем собрать образ из директории vllm-service
+    build: ./vllm-service
+    command: [
+      "--model", "islomov/navaistt_v1_medium",
+      "--port", "5085",
+      "--host", "0.0.0.0",
+      # Дополнительные аргументы VLLM, если нужны, например:
+      # "--gpu-memory-utilization", "0.9",
+      # "--dtype", "auto",
+      # "--trust-remote-code", # Раскомментируйте, если модель требует
+    ]
+    # Порт 8000 VLLM не обязательно пробрасывать на хост,
+    # так как UI будет обращаться к нему внутри сети Docker по имени сервиса
+    # Coolify сам может пробросить его, если вам нужен прямой доступ к API VLLM
+    # ports:
+    #   - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # Количество GPU
+              capabilities: [gpu]
+    volumes:
+      # Volume для кеширования модели (рекомендуется)
+      - stt_model_cache:/root/.cache/huggingface/hub
+    restart: unless-stopped # Автоматический перезапуск контейнера
+    # Coolify по умолчанию создает сеть, в которой сервисы могут обращаться друг к другу по имени
+
+  stt-webui:
+    # Указываем собрать образ из директории webui-service
+    build: ./webui-service
+    ports:
+      - "7860:7860" # Пробрасываем порт Gradio. Coolify может управлять этим.
+    environment:
+      # Адрес VLLM сервиса внутри сети Docker (имя сервиса:порт/v1)
+      - VLLM_API_BASE=http://stt-service:5085/v1
+      # API ключ для VLLM (укажите реальный, если настроено на VLLM)
+      - API_KEY=sk-any-key
+      - MODEL_NAME=islomov/navaistt_v1_medium
+    restart: unless-stopped # Автоматический перезапуск контейнера
+    # Убеждаемся, что VLLM сервис запускается раньше UI
+    depends_on:
+      - stt-service
+    # Coolify по умолчанию добавляет сервисы в одну сеть
+
+# Определяем volume для кеширования модели
+volumes:
+  stt_model_cache:
