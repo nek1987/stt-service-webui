@@ -22,7 +22,9 @@ RUN pip3 install --no-cache-dir \
       transformers>=4.23 \
       ctranslate2>=3.0 \
       faster-whisper \
-      fastapi uvicorn
+      fastapi \
+      uvicorn \
+      python-multipart
 # ——————————————————————————————————————————————
 
 # Конвертация модели в CTranslate2-формат
