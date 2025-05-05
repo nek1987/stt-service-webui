@@ -1,2 +1,2 @@
 gradio
-openai
+requests
