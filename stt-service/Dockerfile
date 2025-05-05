@@ -1,28 +1,34 @@
-# 1) Базовый CUDA-runtime (правильный тег)
 FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
-# 2) Отключаем проблемные GnuTLS-оптимизации
 ENV GNUTLS_CPUID_OVERRIDE=0x1
 
-# 3) Устанавливаем system-зависимости + Python 3 + pip3
+# Устанавливаем Python, pip и системные пакеты
 RUN apt-get update -o Acquire::ForceIPv4=true \
  && apt-get install -y --no-install-recommends \
-      apt-transport-https ca-certificates \
       python3 python3-pip \
+      apt-transport-https ca-certificates \
       ffmpeg git \
  && rm -rf /var/lib/apt/lists/*
 
-# 4) Рабочая директория
 WORKDIR /app
 
-# 5) Устанавливаем Python-пакеты через pip3
+# 1) Устанавливаем конвертер и сам CTranslate2
 RUN pip3 install --no-cache-dir \
-      torch torchvision --index-url https://download.pytorch.org/whl/cu121 && \
-    pip3 install --no-cache-dir faster-whisper[all] fastapi uvicorn
+      transformers[torch]>=4.23 \
+      ctranslate2>=3.0 \
+      faster-whisper[all] fastapi uvicorn
 
-# 6) Копируем код
+# 2) Конвертируем HF-модель в CTranslate2-формат (будет лежать в /models)
+RUN mkdir /models \
+ && ct2-transformers-converter \
+      --model islomov/navaistt_v1_medium \
+      --output_dir /models/islomov_navaistt_v1_medium_ct2 \
+      --copy_files tokenizer.json preprocessor_config.json \
+      --quantization float16
+
+# 3) Копируем приложение
 COPY app.py .
 
-# 7) Экспоним порт и запускаем UVicorn
-EXPOSE 5085
+EXPOSE 8000
+
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5085"]
