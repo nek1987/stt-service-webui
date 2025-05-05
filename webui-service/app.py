@@ -3,6 +3,7 @@ import requests
 import gradio as gr
 import logging
 
+# Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -10,10 +11,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Эндпоинт STT-сервиса
 STT_API = os.environ.get("STT_API", "http://stt-service:5085/transcribe")
 logger.info(f"STT_API endpoint set to {STT_API}")
 
+
 def transcribe_audio(audio_path):
+    """
+    Загружает аудиофайл по пути, отправляет его на STT-сервис и возвращает распознанный текст.
+    """
     logger.info(f"Received audio file at {audio_path}")
     try:
         with open(audio_path, "rb") as f:
@@ -25,8 +31,9 @@ def transcribe_audio(audio_path):
             logger.info(f"Transcription result: {text[:100]}...")
             return text
     except Exception as e:
-        logger.error(f"Error during transcription: {e}", exc_info=True)
+        logger.exception("Error during transcription")
         return f"Error: {e}"
+
 
 if __name__ == "__main__":
     iface = gr.Interface(
@@ -39,7 +46,7 @@ if __name__ == "__main__":
         outputs=gr.Textbox(label="Transcription"),
         title="STT Web UI",
         description="Upload an audio file (wav, mp3, ogg, opus, etc.) and receive transcription.",
-        flagging_mode=False
+        flagging_mode="never"
     )
     logger.info("Launching Gradio interface...")
     iface.launch(server_name="0.0.0.0", server_port=7860, share=False)
