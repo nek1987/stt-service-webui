@@ -9,9 +9,10 @@ services:
       "--port", "5085",
       "--host", "0.0.0.0",
       # Дополнительные аргументы VLLM, если нужны, например:
-      # "--gpu-memory-utilization", "0.9",
-      # "--dtype", "auto",
-      # "--trust-remote-code", # Раскомментируйте, если модель требует
+      # "--gpu-memory-utilization", "0.9", # Ограничение использования памяти GPU (0.0 до 1.0)
+      # "--dtype", "auto", # Тип данных модели (auto, half, float)
+      # "--trust-remote-code", # Раскомментируйте, если модель требует trust_remote_code=True
+      # "--max-model-len", "2048" # Максимальная длина последовательности
     ]
     # Порт 8000 VLLM не обязательно пробрасывать на хост,
     # так как UI будет обращаться к нему внутри сети Docker по имени сервиса
@@ -23,10 +24,11 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1 # Количество GPU
+              count: 1 # Количество GPU (или укажите device_ids: ['0', '1'])
               capabilities: [gpu]
     volumes:
-      # Volume для кеширования модели (рекомендуется)
+      # Volume для кеширования модели (рекомендуется для ускорения перезапусков)
+      # Убедитесь, что путь на хосте доступен для пользователя, от имени которого запускается Docker/Coolify
       - stt_model_cache:/root/.cache/huggingface/hub
     restart: unless-stopped # Автоматический перезапуск контейнера
     # Coolify по умолчанию создает сеть, в которой сервисы могут обращаться друг к другу по имени
@@ -38,10 +40,12 @@ services:
       - "7860:7860" # Пробрасываем порт Gradio. Coolify может управлять этим.
     environment:
       # Адрес VLLM сервиса внутри сети Docker (имя сервиса:порт/v1)
-      - VLLM_API_BASE=http://stt-service:5085/v1
+      # Это значение должно работать, если оба сервиса в одном Compose файле/ресурсе Coolify
+      - VLLM_API_BASE=http://stt-service:8000/v1
       # API ключ для VLLM (укажите реальный, если настроено на VLLM)
+      # Если VLLM запущен без --api-key, любое значение подойдет
       - API_KEY=sk-any-key
-      - MODEL_NAME=islomov/navaistt_v1_medium
+      - MODEL_NAME=islomov/navaistt_v1_medium # Имя модели STT
     restart: unless-stopped # Автоматический перезапуск контейнера
     # Убеждаемся, что VLLM сервис запускается раньше UI
     depends_on:
