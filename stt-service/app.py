@@ -1,19 +1,24 @@
-import io
 from fastapi import FastAPI, File, UploadFile
-from faster_whisper import WhisperModel
+from transformers import pipeline
+import io
 
-app = FastAPI(title="STT faster-whisper + CTranslate2")
+app = FastAPI(
+    title="STT via Huggingface pipeline",
+    description="Whisper-medium for Uzbek transcription",
+)
 
-# Загружаем уже сконвертированную модель
-model = WhisperModel(
-    "/models/islomov_navaistt_v1_medium_ct2",
-    device="cuda",
-    compute_type="float16",
+# Загружаем модель один раз при старте
+asr = pipeline(
+    "automatic-speech-recognition",
+    model="islomov/navaistt_v1_medium",
+    device=0,                 # GPU 0
+    chunk_length_s=30,        # разбивать длинные аудио на 30s
+    stride_length_s=(5, 5),   # наложение контекста
 )
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     data = await file.read()
-    segments, _ = model.transcribe(io.BytesIO(data), beam_size=5)
-    text = "".join(seg.text for seg in segments)
-    return {"text": text}
+    # результат содержит {'text': "...", ...}
+    result = asr(data)
+    return {"text": result["text"]}
