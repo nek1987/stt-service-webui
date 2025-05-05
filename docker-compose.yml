@@ -20,7 +20,6 @@ services:
     ports:
       - "7860:7860"
     environment:
-      # указываем новый эндпоинт
       - STT_API=http://stt-service:5085/transcribe
     depends_on:
       - stt-service
