@@ -41,7 +41,7 @@ services:
     environment:
       # Адрес VLLM сервиса внутри сети Docker (имя сервиса:порт/v1)
       # Это значение должно работать, если оба сервиса в одном Compose файле/ресурсе Coolify
-      - VLLM_API_BASE=http://stt-service:8000/v1
+      - VLLM_API_BASE=http://stt-service:5085/v1
       # API ключ для VLLM (укажите реальный, если настроено на VLLM)
       # Если VLLM запущен без --api-key, любое значение подойдет
       - API_KEY=sk-any-key
