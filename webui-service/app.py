@@ -25,7 +25,7 @@ def transcribe_audio(audio_path):
 # Создаём Gradio-интерфейс
 iface = gr.Interface(
     fn=transcribe_audio,
-    inputs=gr.Audio(source="upload", type="filepath", label="Upload Audio"),
+    inputs=gr.Audio(label="Upload Audio", type="filepath"),
     outputs=gr.Textbox(label="Transcription"),
     title="STT Web UI",
     description="Upload an audio file and receive transcription from the STT service.",
