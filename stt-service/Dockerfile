@@ -4,8 +4,7 @@ ENV GNUTLS_CPUID_OVERRIDE=0x1
 RUN apt-get update -o Acquire::ForceIPv4=true \
  && apt-get install -y --no-install-recommends \
       python3 python3-pip \
-      apt-transport-https ca-certificates \
-      ffmpeg git \
+      ffmpeg git libsndfile1 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -21,6 +20,17 @@ RUN pip3 install --no-cache-dir \
       fastapi \
       uvicorn \
       python-multipart
+
+# Устанавливаем PyTorch, transformers и аудиозависимости
+RUN pip3 install --no-cache-dir \
+      torch torchvision \
+      --extra-index-url https://download.pytorch.org/whl/cu121
+
+RUN pip3 install --no-cache-dir \
+      transformers \
+      fastapi uvicorn python-multipart \
+      soundfile torchaudio
+
 
 COPY app.py .
 
