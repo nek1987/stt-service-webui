@@ -21,6 +21,6 @@ services:
       - "7860:7860"
     environment:
       # указываем новый эндпоинт
-      - STT_API=http://stt-service:8000/transcribe
+      - STT_API=http://stt-service:5085/transcribe
     depends_on:
       - stt-service
