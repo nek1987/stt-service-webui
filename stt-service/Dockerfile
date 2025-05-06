@@ -1,10 +1,10 @@
-# 1) Base image with CUDA & cuDNN
+# 1) Base image with CUDA 12.1 + cuDNN 8
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
-# 2) Workaround for apt’s https method crash
+# 2) Workaround for apt https SIGILL
 ENV GNUTLS_CPUID_OVERRIDE=0x1
 
-# 3) Install system dependencies
+# 3) System deps (audio, Python, pip)
 RUN apt-get update -o Acquire::ForceIPv4=true \
  && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -13,18 +13,18 @@ RUN apt-get update -o Acquire::ForceIPv4=true \
 
 WORKDIR /app
 
-# 4) Install transformers & CTranslate2 first (so the converter can import them)
+# 4) Install transformers & the correct CTranslate2 for CUDA12/cuDNN8
 RUN pip3 install --no-cache-dir \
       transformers>=4.23 \
-      ctranslate2>=3.0
+      ctranslate2==4.4.0
 
 # 5) Install faster-whisper and FastAPI stack
 RUN pip3 install --no-cache-dir \
       faster-whisper \
       fastapi uvicorn python-multipart soundfile torchaudio
 
-# 6) Convert the HF Whisper-medium model into CTranslate2 format
-#    (remove any previous conversion, force overwrite)
+# 6) Convert the Huggingface Whisper-medium model to CTranslate2 format
+#    Force-overwrite any existing directory
 RUN rm -rf /models/islomov_navaistt_v1_medium_ct2 \
  && ct2-transformers-converter \
       --model islomov/navaistt_v1_medium \
@@ -35,6 +35,6 @@ RUN rm -rf /models/islomov_navaistt_v1_medium_ct2 \
 # 7) Copy the application code
 COPY app.py .
 
-# 8) Expose and launch
+# 8) Expose port & launch Uvicorn
 EXPOSE 5085
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5085"]
