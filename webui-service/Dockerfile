@@ -1,22 +1,16 @@
-# Используем легковесный базовый образ Python
 FROM python:3.10-slim
 
-# Устанавливаем необходимые системные пакеты для работы с аудио
-# Хотя основная обработка в VLLM, библиотеки могут быть нужны для чтения/обработки в Gradio/зависимостях
-RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
+# System deps for audio handling
+RUN apt-get update && apt-get install -y \
+    ffmpeg libsndfile1 \
+ && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем файл с требованиями и устанавливаем зависимости
-COPY requirements.txt requirements.txt
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем скрипт приложения
 COPY app.py .
 
-# Expose порт, на котором Gradio будет слушать
 EXPOSE 7860
-
-# Команда запуска приложения
 CMD ["python", "app.py"]
