@@ -9,6 +9,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5085/healthz"]
+      start_period: 60s    # wait 60 seconds before first health probe
       interval: 5s
       timeout: 3s
       retries: 5
