@@ -25,7 +25,7 @@ RUN pip3 install --no-cache-dir \
       fastapi uvicorn python-multipart soundfile torchaudio
 
 # Convert the Huggingface Whisper-medium model into CTranslate2 format
-RUN mkdir -p /models/islomov_navaistt_v1_medium_ct2 \
+RUN rm -rf /models/islomov_navaistt_v1_medium_ct2 \
  && ct2-transformers-converter \
       --model islomov/navaistt_v1_medium \
       --output_dir /models/islomov_navaistt_v1_medium_ct2 \
@@ -36,7 +36,8 @@ RUN mkdir -p /models/islomov_navaistt_v1_medium_ct2 \
          special_tokens_map.json \
          tokenizer_config.json \
          preprocessor_config.json \
-      --quantization float16
+      --quantization float16 \
+      --force
 
 
 # Copy application code
