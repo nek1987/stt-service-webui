@@ -1,10 +1,7 @@
-# Base image with CUDA 12.1 and cuDNN8
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
-
-# Avoid GnuTLS SIGILL inside apt method https
 ENV GNUTLS_CPUID_OVERRIDE=0x1
 
-# Install system dependencies
+# 1) Системные зависимости для аудио
 RUN apt-get update -o Acquire::ForceIPv4=true \
  && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -13,18 +10,18 @@ RUN apt-get update -o Acquire::ForceIPv4=true \
 
 WORKDIR /app
 
-# 1) Install PyTorch & torchvision from PyTorch index
+# 2) Устанавливаем сначала transformers и ctranslate2, 
+#    чтобы конвертер смог импортировать AutoConfig
 RUN pip3 install --no-cache-dir \
-      torch torchvision \
-      --extra-index-url https://download.pytorch.org/whl/cu121
+      transformers>=4.23 \
+      ctranslate2>=3.0
 
-# 2) Install faster-whisper and FastAPI stack
+# 3) Устанавливаем faster-whisper и FastAPI-стек
 RUN pip3 install --no-cache-dir \
       faster-whisper \
-      ctranslate2 \
-      fastapi uvicorn python-multipart soundfile torchaudio
+      fastapi uvicorn python-multipart
 
-# Convert the Huggingface Whisper-medium model into CTranslate2 format
+# 4) Конвертируем модель в CTranslate2-формат (force + удаляем старую)
 RUN rm -rf /models/islomov_navaistt_v1_medium_ct2 \
  && ct2-transformers-converter \
       --model islomov/navaistt_v1_medium \
@@ -39,8 +36,7 @@ RUN rm -rf /models/islomov_navaistt_v1_medium_ct2 \
       --quantization float16 \
       --force
 
-
-# Copy application code
+# 5) Копируем ваш сервис и запускаем
 COPY app.py .
 
 EXPOSE 5085
