@@ -1,7 +1,10 @@
+# 1) Base image with CUDA & cuDNN
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+
+# 2) Workaround for apt’s https method crash
 ENV GNUTLS_CPUID_OVERRIDE=0x1
 
-# 1) Системные зависимости для аудио
+# 3) Install system dependencies
 RUN apt-get update -o Acquire::ForceIPv4=true \
  && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -10,34 +13,28 @@ RUN apt-get update -o Acquire::ForceIPv4=true \
 
 WORKDIR /app
 
-# 2) Устанавливаем сначала transformers и ctranslate2, 
-#    чтобы конвертер смог импортировать AutoConfig
+# 4) Install transformers & CTranslate2 first (so the converter can import them)
 RUN pip3 install --no-cache-dir \
       transformers>=4.23 \
       ctranslate2>=3.0
 
-# 3) Устанавливаем faster-whisper и FastAPI-стек
+# 5) Install faster-whisper and FastAPI stack
 RUN pip3 install --no-cache-dir \
       faster-whisper \
-      fastapi uvicorn python-multipart
+      fastapi uvicorn python-multipart soundfile torchaudio
 
-# 4) Конвертируем модель в CTranslate2-формат (force + удаляем старую)
+# 6) Convert the HF Whisper-medium model into CTranslate2 format
+#    (remove any previous conversion, force overwrite)
 RUN rm -rf /models/islomov_navaistt_v1_medium_ct2 \
  && ct2-transformers-converter \
       --model islomov/navaistt_v1_medium \
       --output_dir /models/islomov_navaistt_v1_medium_ct2 \
-      --copy_files \
-         vocab.json \
-         merges.txt \
-         normalizer.json \
-         special_tokens_map.json \
-         tokenizer_config.json \
-         preprocessor_config.json \
       --quantization float16 \
       --force
 
-# 5) Копируем ваш сервис и запускаем
+# 7) Copy the application code
 COPY app.py .
 
+# 8) Expose and launch
 EXPOSE 5085
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5085"]
