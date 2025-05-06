@@ -1,11 +1,10 @@
+import os
 import logging
 import io
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, Header, HTTPException
 from faster_whisper import WhisperModel
 
-# ————————————————————
 # 1) Logging setup
-# ————————————————————
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -13,43 +12,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger("stt-service")
 
-# ————————————————————
-# 2) FastAPI instantiation
-# ————————————————————
+# 2) Read API token from env
+API_TOKEN = os.getenv("API_TOKEN", "")
+if not API_TOKEN:
+    logger.warning("API_TOKEN not set — endpoint will be unprotected!")
+
 app = FastAPI(
     title="STT via faster-whisper",
-    description="Whisper-medium Uzbek transcription with lazy model loading",
+    description="Whisper-medium Uzbek transcription with token-based auth",
 )
 
-# ————————————————————
 # 3) Lazy model placeholder
-# ————————————————————
-model: WhisperModel | None = None
+model = None  # type: WhisperModel | None
 
-# ————————————————————
-# 4) Health check
-# ————————————————————
 @app.get("/healthz")
 async def healthz():
-    """
-    Always returns OK immediately.
-    Model loading happens on the first /transcribe call.
-    """
     return {"status": "ok"}
 
-# ————————————————————
-# 5) Transcription endpoint
-# ————————————————————
 @app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
-    """
-    Reads an uploaded audio file (any format ffmpeg supports),
-    lazy-loads the faster-whisper CTranslate2 model on first request,
-    then runs beam search and returns the combined text.
-    """
-    global model
+async def transcribe(
+    file: UploadFile = File(...),
+    api_key: str = Header(None, alias="X-API-KEY"),
+):
+    # 4) Enforce token auth
+    if API_TOKEN and api_key != API_TOKEN:
+        logger.warning(f"Unauthorized access attempt with key={api_key}")
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # Lazy load the model
+    global model
+    # 5) Lazy-load the model
     if model is None:
         logger.info("Loading Whisper model for the first time…")
         try:
@@ -63,11 +54,9 @@ async def transcribe(file: UploadFile = File(...)):
             logger.exception("Failed to load Whisper model.")
             raise HTTPException(status_code=500, detail=f"Model load error: {e}")
 
-    # Read audio bytes
+    # 6) Read and transcribe
     data = await file.read()
-    logger.info(f"Received audio {len(data)} bytes, filename={file.filename}")
-
-    # Run transcription
+    logger.info(f"Received audio {len(data)} bytes, fname={file.filename}")
     try:
         segments, _ = model.transcribe(
             io.BytesIO(data),
