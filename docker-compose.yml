@@ -7,12 +7,7 @@ services:
       - "5085:5085"
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5085/healthz"]
-      start_period: 60s    # wait 60 seconds before first health probe
-      interval: 5s
-      timeout: 3s
-      retries: 5
+    # <<< УДАЛЕНО секцию healthcheck
 
   webui-service:
     build: ./webui-service
@@ -21,5 +16,4 @@ services:
     environment:
       - STT_API=http://stt-service:5085/transcribe
     depends_on:
-      stt-service:
-        condition: service_healthy
+      - stt-service   # простая зависимость, без проверки здоровья
