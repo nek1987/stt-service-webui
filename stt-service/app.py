@@ -32,7 +32,7 @@ async def transcribe(file: UploadFile = File(...)):
         logger.info("Loading Whisper model for the first time...")
         try:
             model = WhisperModel(
-                "islomov/navaistt_v1_medium",
+                "/models/islomov_navaistt_v1_medium_ct2",
                 device="cuda",
                 compute_type="float16",
             )
