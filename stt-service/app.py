@@ -3,7 +3,9 @@ import io
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from faster_whisper import WhisperModel
 
-# 1) Configure logging
+# ————————————————————
+# 1) Logging setup
+# ————————————————————
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -11,34 +13,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger("stt-service")
 
-# 2) Create FastAPI app
+# ————————————————————
+# 2) FastAPI instantiation
+# ————————————————————
 app = FastAPI(
     title="STT via faster-whisper",
     description="Whisper-medium Uzbek transcription with lazy model loading",
 )
 
-# 3) Placeholder for the model; will load on first request
+# ————————————————————
+# 3) Lazy model placeholder
+# ————————————————————
 model: WhisperModel | None = None
 
+# ————————————————————
+# 4) Health check
+# ————————————————————
 @app.get("/healthz")
 async def healthz():
     """
-    Health check endpoint.
-    Returns 200 OK as soon as the server is up (model not yet loaded).
+    Always returns OK immediately.
+    Model loading happens on the first /transcribe call.
     """
     return {"status": "ok"}
 
+# ————————————————————
+# 5) Transcription endpoint
+# ————————————————————
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     """
-    Transcribe an audio file. On the first call, loads the Whisper model,
-    which takes ~20–30s. Subsequent calls are fast.
+    Reads an uploaded audio file (any format ffmpeg supports),
+    lazy-loads the faster-whisper CTranslate2 model on first request,
+    then runs beam search and returns the combined text.
     """
     global model
 
-    # Lazy-load the model on demand
+    # Lazy load the model
     if model is None:
-        logger.info("Loading Whisper model for the first time...")
+        logger.info("Loading Whisper model for the first time…")
         try:
             model = WhisperModel(
                 "/models/islomov_navaistt_v1_medium_ct2",
@@ -52,9 +65,9 @@ async def transcribe(file: UploadFile = File(...)):
 
     # Read audio bytes
     data = await file.read()
-    logger.info(f"Received audio: {len(data)} bytes, filename={file.filename}")
+    logger.info(f"Received audio {len(data)} bytes, filename={file.filename}")
 
-    # Perform transcription
+    # Run transcription
     try:
         segments, _ = model.transcribe(
             io.BytesIO(data),
@@ -62,8 +75,8 @@ async def transcribe(file: UploadFile = File(...)):
             best_of=5,
             language="uz"
         )
-        text = "".join([seg.text for seg in segments])
-        logger.info(f"Transcription successful: {text[:80]}...")
+        text = "".join(seg.text for seg in segments)
+        logger.info(f"Transcription successful: {text[:80]}…")
         return {"text": text}
     except Exception as e:
         logger.exception("Error during transcription.")
