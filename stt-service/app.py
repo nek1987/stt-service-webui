@@ -13,15 +13,11 @@ logger = logging.getLogger("stt-service")
 
 app = FastAPI(
     title="STT via faster-whisper",
-    description="Whisper-medium Uzbek transcription using faster-whisper",
+    description="Whisper-medium Uzbek transcription with lazy model loading",
 )
 
-# Load model once
-model = WhisperModel(
-    "islomov/navaistt_v1_medium",
-    device="cuda",
-    compute_type="float16",
-)
+# Placeholder for the Whisper model; it will be loaded on first request
+model = None
 
 @app.get("/healthz")
 async def healthz():
@@ -29,8 +25,25 @@ async def healthz():
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
+    global model
+
+    # Lazy-load the model on first transcription request
+    if model is None:
+        logger.info("Loading Whisper model for the first time...")
+        try:
+            model = WhisperModel(
+                "islomov/navaistt_v1_medium",
+                device="cuda",
+                compute_type="float16",
+            )
+            logger.info("Whisper model loaded successfully.")
+        except Exception as e:
+            logger.exception("Failed to load Whisper model.")
+            raise HTTPException(status_code=500, detail=f"Model load error: {e}")
+
+    # Read audio bytes and run transcription
     data = await file.read()
-    logger.info(f"Received {len(data)} bytes file={file.filename}")
+    logger.info(f"Received audio: {len(data)} bytes, filename={file.filename}")
     try:
         segments, _ = model.transcribe(
             io.BytesIO(data),
@@ -39,8 +52,8 @@ async def transcribe(file: UploadFile = File(...)):
             language="uz"
         )
         text = "".join(seg.text for seg in segments)
-        logger.info(f"Transcription success: {text[:80]}…")
+        logger.info(f"Transcription successful: {text[:80]}...")
         return {"text": text}
     except Exception as e:
-        logger.exception("Transcription failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error during transcription.")
+        raise HTTPException(status_code=500, detail=f"Transcription error: {e}")
