@@ -7,6 +7,7 @@ services:
       - "5085:5085"
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
+      - API_TOKEN=${API_TOKEN}
     # <<< УДАЛЕНО секцию healthcheck
 
   webui-service:
@@ -15,5 +16,8 @@ services:
       - "7860:7860"
     environment:
       - STT_API=http://stt-service:5085/transcribe
+      - API_TOKEN=${API_TOKEN}
+      - UI_USER=${UI_LOGIN}
+      - UI_PASS=${UI_PASS}
     depends_on:
       - stt-service   # простая зависимость, без проверки здоровья
