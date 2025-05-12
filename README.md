@@ -1,104 +1,152 @@
 # STT Service WebUI
 
-This repository contains two Docker services for deploying an STT (Automatic Speech Recognition) system using the **islomov/navaistt\_v1\_medium** model (Whisper-medium for Uzbek) and a simple Gradio-based web interface.
+A Docker-based STT (Automatic Speech Recognition) system using **faster-whisper** with a Gradio web UI.
 
-## Architecture
+## Repository Structure
 
 ```text
-stt-service/         # FastAPI service using Huggingface Pipeline
-  ├── Dockerfile     # Builds image with CUDA, cuDNN, Python3, PyTorch, and Transformers
-  └── app.py         # FastAPI application (/healthz, /transcribe)
+stt-service/         # FastAPI service with faster‑whisper + CTranslate2
+  ├── Dockerfile     # Builds CUDA/cuDNN image, installs dependencies, converts model
+  └── app.py         # FastAPI app: /healthz (instant), /transcribe (lazy model load + auth)
 
-webui-service/       # Gradio web interface
-  ├── Dockerfile     # Builds image with Python3, requests, Gradio dependencies
-  └── app.py         # Gradio interface for uploading audio and displaying text
+webui-service/       # Gradio front-end
+  ├── Dockerfile     # Builds Slim Python image with Python libs and ffmpeg
+  ├── requirements.txt
+  └── app.py         # Gradio UI with basic auth, sends X-API-KEY header
 
-docker-compose.yml   # Stack definition, health checks, webui depends on stt-service
+docker-compose.yml   # Defines services, ports, and simple depends_on
+README.md            # This documentation
 ```
+
+---
+
+## Features
+
+* **faster‑whisper** with CTranslate2 for \~2× real-time transcription on GPU
+* **Lazy loading**: model loads on first request (20–30 s), then stays in memory
+* **Token‑based auth**: secure `/transcribe` with `X-API-KEY`
+* **UI Basic Auth**: protect Gradio interface with username/password
+* **Multi‑format support**: WAV, MP3, OGG/Opus, M4A, FLAC, AMR, etc.
+* **Health check**: `/healthz` returns OK immediately
 
 ---
 
 ## Quick Start
 
-1. **Build and run**
+### 1. Clone & backup
 
-   ```bash
-   docker-compose down --rmi local  # optional: remove local images
-   docker-compose build             # build both services
-   docker-compose up -d             # run in detached mode
-   ```
+```bash
+git clone https://github.com/nek1987/stt-service-webui.git
+cd stt-service-webui
+# (optional) git archive -o backup.tar HEAD
+```
 
-2. **Check service health**
+### 2. Define environment variables
 
-   ```bash
-   curl http://localhost:5085/healthz
-   # {"status":"ok"}
-   ```
+In your `.env` or directly in `docker-compose.yml`:
 
-3. **Web UI**
+```yaml
+services:
+  stt-service:
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - API_TOKEN=your-secret-token
 
-   Open your browser at `http://localhost:7860`.
+  webui-service:
+    environment:
+      - STT_API=http://stt-service:5085/transcribe
+      - API_TOKEN=your-secret-token
+      - UI_USER=admin
+      - UI_PASS=s3cret
+```
 
-   * Upload an audio file (WAV, MP3, OGG/Opus, M4A, FLAC, AMR, etc.)
-   * Press **Submit** — your audio will be sent to the STT service
-   * View the recognized text
+### 3. Build & run
 
-4. **API example**
+```bash
+docker-compose down --rmi local    # optional: remove old images
+docker-compose build               # build both services
+docker-compose up -d               # start in detached mode
+```
 
-   ```bash
-   curl -X POST "http://localhost:5085/transcribe" \
-        -F "file=@/path/to/audio.wav" \
-        -H "Accept: application/json"
-   # {"text":"...transcribed text..."}
-   ```
+### 4. Check services
 
----
+```bash
+# STT service health
+curl http://localhost:5085/healthz
+# → {"status":"ok"}
 
-## Configuration and Environment Variables
-
-* `STT_API` (in webui-service): URL of the STT service, e.g., `http://stt-service:5085/transcribe`.
-* `NVIDIA_VISIBLE_DEVICES` (in stt-service): GPU device index to use.
-
----
-
-## Dependencies
-
-* **stt-service**:
-
-  * Python 3, FastAPI, Uvicorn
-  * PyTorch + CUDA/cuDNN8
-  * Transformers (Huggingface)
-  * soundfile, torchaudio, python-multipart
-
-* **webui-service**:
-
-  * Python 3, Gradio, requests
+# Gradio UI
+open http://localhost:7860
+# Will prompt for user/pass (UI_USER/UI_PASS)
+```
 
 ---
 
-## Development and Debugging
+## Service Configuration
 
-* View logs:
+### stt-service
 
-  ```bash
-  docker-compose logs -f stt-service
-  docker-compose logs -f webui-service
-  ```
-* Check containers and ports:
+* **Port:** 5085
+* **Endpoints:**
 
-  ```bash
-  docker-compose ps
-  ```
+  * `GET  /healthz` → `{"status":"ok"}`
+  * `POST /transcribe` (multipart `file@`, header `X-API-KEY`)
+* **Auth:** must include `X-API-KEY: your-secret-token`
+* **Model path:** baked in `/models/islomov_navaistt_v1_medium_ct2`
+* **Lazy load**: model initializes on first `/transcribe`
+
+### webui-service
+
+* **Port:** 7860
+* **Auth:** basic HTTP auth (username/UI\_USER, password/UI\_PASS)
+* **UI → Service:** sends `X-API-KEY` header automatically
 
 ---
 
-## Changelog
+## API Reference
 
-* **v2**: Switched from vLLM to Huggingface Pipeline (removed CTranslate2 and faster-whisper).
-* **v1**: Initial implementation based on vLLM.
+### Health Check
+
+```
+GET http://<host>:5085/healthz
+→ 200 OK {"status":"ok"}
+```
+
+### Transcribe Audio
+
+```
+POST http://<host>:5085/transcribe
+Headers:
+  X-API-KEY: your-secret-token
+  Accept: application/json
+Body:
+  multipart/form-data, field "file" = audio file
+```
+
+**Response** `200 OK`:
+
+```json
+{ "text": "transcribed text here" }
+```
+
+**Errors**:
+
+* `401 Unauthorized` if missing/invalid token
+* `400 Bad Request` if no file
+* `500 Internal Server Error` on model/load failures
+
+---
+
+## Notes & Tips
+
+* Increase GPU concurrency by running multiple instances behind a load balancer.
+* To support streaming partial results, integrate `model.transcribe(..., stream=True)`.
+* Tune `beam_size` and `compute_type` in `app.py` for quality vs. speed.
 
 ---
 
 ## Author
 
-**Jamshid Radjabov** - AI / Telecom Expert
+**Jamshid Radjabov** — Telecom expert and AI Enthusias .
+
+*Pull requests and issues are welcome!*
