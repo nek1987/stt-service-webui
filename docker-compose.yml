@@ -6,6 +6,7 @@ services:
     ports:
       - "5085:5085"
     environment:
+      - MODEL_PATH=/models/islomov_navaistt_v2_medium_ct2
       - NVIDIA_VISIBLE_DEVICES=0
       - API_TOKEN=${API_TOKEN}
     # <<< УДАЛЕНО секцию healthcheck
