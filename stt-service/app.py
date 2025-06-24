@@ -8,19 +8,15 @@ from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Header, HTTPException
 from faster_whisper import WhisperModel
 
-# ────────── LOGGING (global) ──────────
+# ────────── LOGGING ──────────
 _counter = itertools.count(1)  # incremental request ID
 
-# LogRecordFactory to guarantee `req` attr for *every* record
-_old_factory = logging.getLogRecordFactory()
-
-def _record_factory(*args, **kwargs):
-    record = _old_factory(*args, **kwargs)
-    if "req" not in record.__dict__:
-        record.req = "-"
-    return record
-
-logging.setLogRecordFactory(_record_factory)
+class ReqFilter(logging.Filter):
+    """Ensure every LogRecord has `req` attr so formatter never fails."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "req"):
+            record.req = "-"
+        return True
 
 LOG_FMT = "%(asctime)s %(levelname)s [req=%(req)s] %(message)s"
 logging.basicConfig(
@@ -28,6 +24,7 @@ logging.basicConfig(
     format=LOG_FMT,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+logging.getLogger().addFilter(ReqFilter())  # root logger
 logger = logging.getLogger("stt-service")
 
 # ────────── CONFIG ──────────
@@ -38,7 +35,6 @@ if not API_TOKEN:
 MODEL_PATH_DEFAULT = "/models/islomov_navaistt_v2_medium_ct2"
 
 app = FastAPI(title="STT via faster-whisper")
-
 model: Optional[WhisperModel] = None  # lazy singleton
 
 # ────────── ROUTES ──────────
