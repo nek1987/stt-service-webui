@@ -49,6 +49,7 @@ In your `.env` or directly in `docker-compose.yml`:
 services:
   stt-service:
     environment:
+      - MODEL_PATH=/models/islomov_navaistt_v2_medium_ct2
       - NVIDIA_VISIBLE_DEVICES=0
       - API_TOKEN=your-secret-token
 
