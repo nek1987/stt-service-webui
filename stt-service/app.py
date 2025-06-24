@@ -8,19 +8,19 @@ from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Header, HTTPException
 from faster_whisper import WhisperModel
 
-# ────────── LOGGING SETUP ──────────
+# ────────── LOGGING (global) ──────────
 _counter = itertools.count(1)  # incremental request ID
 
-class RequestFilter(logging.Filter):
-    """Ensure every LogRecord has the attribute *req*.
-    If user code passed it via ``extra={'req': ...}`` we keep it;
-    otherwise we inject a dash so the formatter never fails.
-    """
+# LogRecordFactory to guarantee `req` attr for *every* record
+_old_factory = logging.getLogRecordFactory()
 
-    def filter(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
-        if not hasattr(record, "req"):
-            record.req = "-"  # type: ignore[attr-defined]
-        return True
+def _record_factory(*args, **kwargs):
+    record = _old_factory(*args, **kwargs)
+    if "req" not in record.__dict__:
+        record.req = "-"
+    return record
+
+logging.setLogRecordFactory(_record_factory)
 
 LOG_FMT = "%(asctime)s %(levelname)s [req=%(req)s] %(message)s"
 logging.basicConfig(
@@ -28,13 +28,12 @@ logging.basicConfig(
     format=LOG_FMT,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logging.getLogger().addFilter(RequestFilter())
 logger = logging.getLogger("stt-service")
 
 # ────────── CONFIG ──────────
 API_TOKEN = os.getenv("API_TOKEN", "")
 if not API_TOKEN:
-    logger.warning("API_TOKEN not set — endpoint will be unprotected!", extra={"req": "-"})
+    logger.warning("API_TOKEN not set — endpoint will be unprotected!")
 
 MODEL_PATH_DEFAULT = "/models/islomov_navaistt_v2_medium_ct2"
 
@@ -53,36 +52,30 @@ async def transcribe(
     file: UploadFile = File(...),
     api_key: str | None = Header(None, alias="X-API-KEY"),
 ):
-    # ─── Auth ────────────────────────────────────────────────────────────
     if API_TOKEN and api_key != API_TOKEN:
-        logger.warning("Unauthorized access attempt", extra={"req": "-"})
+        logger.warning("Unauthorized access attempt")
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     global model
     req_id = next(_counter)
+    log = logging.LoggerAdapter(logger, {"req": req_id})
 
-    # ─── Lazy model init ────────────────────────────────────────────────
+    # Lazy model load
     if model is None:
-        logger.info("Loading Whisper model…", extra={"req": req_id})
+        log.info("Loading Whisper model…")
         try:
             model_path = os.getenv("MODEL_PATH", MODEL_PATH_DEFAULT)
             model = WhisperModel(model_path, device="cuda", compute_type="float16")
-            logger.info("Whisper model loaded.", extra={"req": req_id})
-        except Exception as exc:  # pragma: no cover
-            logger.exception("Failed to load model", extra={"req": req_id})
+            log.info("Whisper model loaded.")
+        except Exception as exc:
+            log.exception("Failed to load model")
             raise HTTPException(status_code=500, detail=f"Model load error: {exc}")
 
-    # ─── Read audio ─────────────────────────────────────────────────────
+    # Read audio
     data = await file.read()
     t0 = time.perf_counter()
-    logger.info(
-        "Received audio %d bytes, fname=%s",
-        len(data),
-        file.filename,
-        extra={"req": req_id},
-    )
+    log.info("Received audio %d bytes, fname=%s", len(data), file.filename)
 
-    # ─── Transcribe ─────────────────────────────────────────────────────
     try:
         segments, _ = model.transcribe(
             io.BytesIO(data),
@@ -92,8 +85,8 @@ async def transcribe(
         )
         text = "".join(seg.text for seg in segments)
         took = time.perf_counter() - t0
-        logger.info("Done (%.3fs): %s…", took, text[:60], extra={"req": req_id})
+        log.info("Done (%.3fs): %s…", took, text[:60])
         return {"text": text}
-    except Exception as exc:  # pragma: no cover
-        logger.exception("Transcription error", extra={"req": req_id})
+    except Exception as exc:
+        log.exception("Transcription error")
         raise HTTPException(status_code=500, detail=f"Transcription error: {exc}")
