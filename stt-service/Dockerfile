@@ -25,10 +25,10 @@ RUN pip3 install --no-cache-dir \
 
 # 6) Convert the Huggingface Whisper-medium model to CTranslate2 format
 #    Force-overwrite any existing directory
-RUN rm -rf /models/islomov_navaistt_v1_medium_ct2 \
+RUN rm -rf /models/islomov_navaistt_v2_medium_ct2 \
  && ct2-transformers-converter \
-      --model islomov/navaistt_v1_medium \
-      --output_dir /models/islomov_navaistt_v1_medium_ct2 \
+      --model islomov/navaistt_v2_medium \
+      --output_dir /models/islomov_navaistt_v2_medium_ct2 \
       --quantization float16 \
       --force
 
