@@ -44,8 +44,12 @@ async def transcribe(
     if model is None:
         logger.info("Loading Whisper model for the first time…")
         try:
+            MODEL_PATH = os.getenv(
+                "MODEL_PATH",
+                "/models/islomov_navaistt_v2_medium_ct2",   # дефолт на новую модель
+            )
             model = WhisperModel(
-                "/models/islomov_navaistt_v1_medium_ct2",
+                MODEL_PATH,
                 device="cuda",
                 compute_type="float16",
             )
