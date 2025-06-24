@@ -99,4 +99,3 @@ async def transcribe(
     except Exception as e:
         logger.exception("Transcription error.", extra={"req": req_id})
         raise HTTPException(status_code=500, detail=f"Transcription error: {e}")
-```
