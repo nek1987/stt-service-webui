@@ -1,15 +1,25 @@
-import os
-import logging
+import os, logging, time, itertools
 import io
 from fastapi import FastAPI, File, UploadFile, Header, HTTPException
 from faster_whisper import WhisperModel
 
 # 1) Logging setup
+_counter = itertools.count(1)          # глобальный счётчик
+
+class ReqFilter(logging.Filter):
+    def filter(self, record):
+        # если handler получил extra={"req": …} ― покажем номер, иначе «–»
+        record.req = getattr(record, "req", "-")
+        return True
+
+LOG_FMT = "%(asctime)s %(levelname)s [req=%(req)s] %(message)s"
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format=LOG_FMT,
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler()],   # пишем прямиком в stdout
 )
+logging.getLogger().addFilter(ReqFilter())
 logger = logging.getLogger("stt-service")
 
 # 2) Read API token from env
@@ -40,6 +50,7 @@ async def transcribe(
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     global model
+    req_id = next(_counter)
     # 5) Lazy-load the model
     if model is None:
         logger.info("Loading Whisper model for the first time…")
@@ -60,7 +71,11 @@ async def transcribe(
 
     # 6) Read and transcribe
     data = await file.read()
-    logger.info(f"Received audio {len(data)} bytes, fname={file.filename}")
+    t0 = time.perf_counter()
+    logger.info(
+        f"Received audio {len(data)} bytes, fname={file.filename}",
+        extra={"req": req_id},
+    )
     try:
         segments, _ = model.transcribe(
             io.BytesIO(data),
@@ -69,8 +84,12 @@ async def transcribe(
             language="uz"
         )
         text = "".join(seg.text for seg in segments)
-        logger.info(f"Transcription successful: {text[:80]}…")
-        return {"text": text}
+        took = time.perf_counter() - t0
+        logger.info(
+            f"Done ({took:.3f}s): {text[:60]}…",
+            extra={"req": req_id},
+        )
+  
     except Exception as e:
-        logger.exception("Error during transcription.")
+        logger.exception("Error", extra={"req": req_id})
         raise HTTPException(status_code=500, detail=f"Transcription error: {e}")
