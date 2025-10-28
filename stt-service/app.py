@@ -12,24 +12,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger("stt-service")
 
-# 2) Read API tokens from env
+# 2) Read API tokens from env with validation
 def _load_api_tokens() -> set[str]:
+    """Load and validate API tokens from environment variables."""
+    MIN_TOKEN_LENGTH = 8
+    tokens_raw = []
+
+    # Try API_TOKENS first (comma-separated list)
     tokens_env = os.getenv("API_TOKENS")
     if tokens_env:
-        tokens = {token.strip() for token in tokens_env.split(",") if token.strip()}
-        if not tokens:
-            logger.warning("API_TOKENS provided but no valid entries found")
-        return tokens
+        tokens_raw = [token.strip() for token in tokens_env.split(",") if token.strip()]
 
-    single_token = os.getenv("API_TOKEN", "").strip()
-    return {single_token} if single_token else set()
+    # Fallback to single API_TOKEN if API_TOKENS is empty
+    if not tokens_raw:
+        single_token = os.getenv("API_TOKEN", "").strip()
+        if single_token:
+            tokens_raw = [single_token]
+
+    # Validate tokens
+    valid_tokens = set()
+    for token in tokens_raw:
+        if len(token) < MIN_TOKEN_LENGTH:
+            logger.warning(
+                "Ignoring token with insufficient length (%d chars, min %d required): %s***",
+                len(token), MIN_TOKEN_LENGTH, token[:3] if len(token) >= 3 else "***"
+            )
+            continue
+        valid_tokens.add(token)
+
+    # Check for duplicates
+    if len(tokens_raw) != len(valid_tokens):
+        logger.info("Removed %d duplicate token(s)", len(tokens_raw) - len(valid_tokens))
+
+    return valid_tokens
+
+
+def _mask_token(token: str) -> str:
+    """Mask API token for safe logging (show first 6 and last 3 chars)."""
+    if len(token) <= 9:
+        return "***" + token[-3:] if len(token) >= 3 else "***"
+    return token[:6] + "***" + token[-3:]
 
 
 API_TOKENS = _load_api_tokens()
 if not API_TOKENS:
     logger.warning("No API tokens configured — endpoint will be unprotected!")
 else:
-    logger.info("Configured %d API token(s)", len(API_TOKENS))
+    logger.info("Configured %d valid API token(s)", len(API_TOKENS))
+    for token in sorted(API_TOKENS):  # sorted for consistent logging
+        logger.info("  - Token: %s", _mask_token(token))
 
 app = FastAPI(
     title="STT via faster-whisper",
@@ -49,9 +80,20 @@ async def transcribe(
     api_key: str = Header(None, alias="X-API-KEY"),
 ):
     # 4) Enforce token auth
-    if API_TOKENS and (not api_key or api_key not in API_TOKENS):
-        logger.warning("Unauthorized access attempt")
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    if API_TOKENS:
+        if not api_key:
+            logger.warning("Unauthorized access attempt: No API key provided")
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
+        if api_key not in API_TOKENS:
+            logger.warning(
+                "Unauthorized access attempt: Invalid key %s",
+                _mask_token(api_key)
+            )
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
+        # Log successful authentication
+        logger.info("Authenticated with key: %s", _mask_token(api_key))
 
     global model
     # 5) Lazy-load the model

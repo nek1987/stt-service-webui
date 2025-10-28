@@ -51,14 +51,29 @@ services:
     environment:
       - MODEL_PATH=/models/islomov_navaistt_v2_medium_ct2
       - NVIDIA_VISIBLE_DEVICES=0
-      - API_TOKENS=token-alpha,token-bravo,token-charlie
+      # Multiple API tokens (comma-separated, no spaces)
+      - API_TOKENS=${API_TOKENS}     # e.g., API_TOKENS=token-alpha,token-bravo,token-charlie
+      # Single token (backwards compatible)
+      - API_TOKEN=${API_TOKEN}       # e.g., API_TOKEN=single-token-key
 
   webui-service:
     environment:
       - STT_API=http://stt-service:5085/transcribe
-      - API_TOKEN=token-alpha  # legacy single-token env var still supported
-      - UI_USER=admin
-      - UI_PASS=s3cret
+      - API_TOKEN=${API_TOKEN}       # webui uses single token
+      - UI_USER=${UI_LOGIN}
+      - UI_PASS=${UI_PASS}
+```
+
+In your `.env` file:
+```bash
+# API authentication (choose one method)
+API_TOKENS=token-alpha,token-bravo,token-charlie  # Multiple tokens
+# OR
+API_TOKEN=single-token-key                         # Single token
+
+# UI authentication
+UI_LOGIN=admin
+UI_PASS=s3cret
 ```
 
 ### 3. Build & run
@@ -101,11 +116,22 @@ open http://localhost:7860
 #### Configuring API tokens
 
 * **Multiple tokens:** set `API_TOKENS` to a comma-separated list without spaces, e.g.
-  `API_TOKENS=service-a-key,service-b-key`.
+  `API_TOKENS=service-a-key,service-b-key,service-c-key`.
 * **Single token (backwards compatible):** define `API_TOKEN=service-a-key`. The value
   is automatically combined with any tokens in `API_TOKENS`.
 * **No tokens:** omit both variables to leave the `/transcribe` endpoint open
   (not recommended for production deployments).
+
+**Token validation:**
+* Minimum length: 8 characters (shorter tokens are rejected with a warning)
+* Whitespace is automatically trimmed
+* Duplicate tokens are automatically removed
+* On startup, all configured tokens are logged (masked for security, e.g., `token-***pha`)
+
+**Token usage logging:**
+* Each authenticated request logs the masked token used (e.g., `token-***pha`)
+* Failed authentication attempts are logged with the invalid token (masked)
+* No API key provided: logged as "No API key provided"
 
 ### webui-service
 

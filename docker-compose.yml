@@ -8,6 +8,9 @@ services:
     environment:
       - MODEL_PATH=/models/islomov_navaistt_v2_medium_ct2
       - NVIDIA_VISIBLE_DEVICES=0
+      # API authentication: use API_TOKENS for multiple keys (comma-separated) or API_TOKEN for single key
+      # Example: API_TOKENS=token-alpha,token-bravo,token-charlie
+      - API_TOKENS=${API_TOKENS}
       - API_TOKEN=${API_TOKEN}
     # <<< УДАЛЕНО секцию healthcheck
 
