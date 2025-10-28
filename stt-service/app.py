@@ -12,10 +12,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger("stt-service")
 
-# 2) Read API token from env
-API_TOKEN = os.getenv("API_TOKEN", "")
-if not API_TOKEN:
-    logger.warning("API_TOKEN not set — endpoint will be unprotected!")
+# 2) Read API tokens from env
+def _load_api_tokens() -> set[str]:
+    tokens_env = os.getenv("API_TOKENS")
+    if tokens_env:
+        tokens = {token.strip() for token in tokens_env.split(",") if token.strip()}
+        if not tokens:
+            logger.warning("API_TOKENS provided but no valid entries found")
+        return tokens
+
+    single_token = os.getenv("API_TOKEN", "").strip()
+    return {single_token} if single_token else set()
+
+
+API_TOKENS = _load_api_tokens()
+if not API_TOKENS:
+    logger.warning("No API tokens configured — endpoint will be unprotected!")
+else:
+    logger.info("Configured %d API token(s)", len(API_TOKENS))
 
 app = FastAPI(
     title="STT via faster-whisper",
@@ -35,8 +49,8 @@ async def transcribe(
     api_key: str = Header(None, alias="X-API-KEY"),
 ):
     # 4) Enforce token auth
-    if API_TOKEN and api_key != API_TOKEN:
-        logger.warning(f"Unauthorized access attempt with key={api_key}")
+    if API_TOKENS and (not api_key or api_key not in API_TOKENS):
+        logger.warning("Unauthorized access attempt")
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     global model
