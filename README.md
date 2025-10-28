@@ -51,12 +51,12 @@ services:
     environment:
       - MODEL_PATH=/models/islomov_navaistt_v2_medium_ct2
       - NVIDIA_VISIBLE_DEVICES=0
-      - API_TOKEN=your-secret-token
+      - API_TOKENS=token-alpha,token-bravo,token-charlie
 
   webui-service:
     environment:
       - STT_API=http://stt-service:5085/transcribe
-      - API_TOKEN=your-secret-token
+      - API_TOKEN=token-alpha  # legacy single-token env var still supported
       - UI_USER=admin
       - UI_PASS=s3cret
 ```
@@ -92,9 +92,20 @@ open http://localhost:7860
 
   * `GET  /healthz` → `{"status":"ok"}`
   * `POST /transcribe` (multipart `file@`, header `X-API-KEY`)
-* **Auth:** must include `X-API-KEY: your-secret-token`
+* **Auth:** include `X-API-KEY` whose value matches one of the configured tokens. Use
+  `API_TOKENS=token1,token2` (comma-separated list) for multiple keys, or `API_TOKEN`
+  for a single legacy token.
 * **Model path:** baked in `/models/islomov_navaistt_v1_medium_ct2`
 * **Lazy load**: model initializes on first `/transcribe`
+
+#### Configuring API tokens
+
+* **Multiple tokens:** set `API_TOKENS` to a comma-separated list without spaces, e.g.
+  `API_TOKENS=service-a-key,service-b-key`.
+* **Single token (backwards compatible):** define `API_TOKEN=service-a-key`. The value
+  is automatically combined with any tokens in `API_TOKENS`.
+* **No tokens:** omit both variables to leave the `/transcribe` endpoint open
+  (not recommended for production deployments).
 
 ### webui-service
 
@@ -118,7 +129,7 @@ GET http://<host>:5085/healthz
 ```
 POST http://<host>:5085/transcribe
 Headers:
-  X-API-KEY: your-secret-token
+  X-API-KEY: token-alpha
   Accept: application/json
 Body:
   multipart/form-data, field "file" = audio file
